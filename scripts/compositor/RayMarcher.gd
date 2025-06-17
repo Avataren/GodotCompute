@@ -58,12 +58,18 @@ func _render_callback(_effect_callback_type: int, render_data: RenderData) -> vo
 	
 	#var cam_xform : Transform3D = scene_data.get_cam_transform()
 	var view_matrix : Transform3D = scene_data.get_cam_transform()
+	var inv_view_matrix : Transform3D = view_matrix.affine_inverse()
 	var inv_proj_mat : Projection = scene_data.get_cam_projection().inverse()
+	
+
 	
 	for view in scene_buffers.get_view_count():
 		var proj : Projection = scene_data.get_view_projection(view)
-		var fov_deg : float  = proj.get_fov()
-		var push_constants := _fill_push_constants(view_matrix, fov_deg, size, inv_proj_mat[2].w, inv_proj_mat[3].w)
+		var hfov_deg : float = proj.get_fov()                    # horizontal
+		var aspect    = float(size.x) / float(size.y)
+		var vfov_rad  = 2.0 * atan(tan(deg_to_rad(hfov_deg)*0.5) / aspect)		
+		
+		var push_constants := _fill_push_constants(view_matrix, vfov_rad, size, inv_proj_mat[2].w, inv_proj_mat[3].w)
 		var screen_tex:RID = scene_buffers.get_color_layer(view)
 		var depth_tex:RID = scene_buffers.get_depth_layer(view)
 		
@@ -121,8 +127,8 @@ func _render_callback(_effect_callback_type: int, render_data: RenderData) -> vo
 	
 func _fill_push_constants(cam_xform: Transform3D, fov_deg: float, screen: Vector2i, inv2w: float, inv3w: float) -> PackedByteArray:
 	var sun_dir  : Vector3 = Vector3(0.6,0.8,-0.5) 
-	var cloud_base  : float = 500.0                
-	var cloud_top   : float = 600.0
+	var cloud_base  : float = 800.0                
+	var cloud_top   : float = 1200.0
 
 	var f = PackedFloat32Array()
 	f.resize(28)                                    # 28 floats = 112 bytes
@@ -142,7 +148,7 @@ func _fill_push_constants(cam_xform: Transform3D, fov_deg: float, screen: Vector
 	f[21] = cloud_top
 	f[22] = float(screen.x)
 	f[23] = float(screen.y)
-	f[24] = deg_to_rad(fov_deg)
+	f[24] = fov_deg
 	f[25] = inv2w
 	f[26] = inv3w
 	f[27] = 0.0

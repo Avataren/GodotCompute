@@ -23,29 +23,26 @@ layout(push_constant, std430) uniform Params {
 
 float Hash(float n){ return fract(sin(n)*43758.5453); }
 
+
 vec3 WorldRay(vec2 pix)
 {
-    // Step 1: Create Normalized Device Coordinates (NDC) from pixel coordinates.
-    // We flip pix.y because in a compute shader gl_GlobalInvocationID.y starts from the top,
-    // but we want a standard coordinate system where Y points "up".
+    // STEP 1: Flip the pixel's Y-coordinate. This is the standard and robust way
+    // to match screen space (Y-down) to a 3D world's NDC space (Y-up).
+    // This is what your working Menger shader does.
     vec2 flipped_pix = vec2(pix.x, params.screen_size.y - pix.y);
-    
-    // Step 2: Calculate UVs that correctly handle the aspect ratio.
-    // The result 'uv' will be in the range [-aspect, aspect] for x and [-1, 1] for y.
-    // Dividing by screen_size.y is correct because it scales the horizontal component
-    // by the aspect ratio (sx/sy) while keeping the vertical component in the [-1, 1] range.
+
+    // STEP 2: Calculate UVs using the CORRECTED coordinates and handle aspect ratio.
     vec2 uv = (2.0 * flipped_pix - params.screen_size) / params.screen_size.y;
 
-    // Step 3: Get camera orientation vectors from the camera's transform matrix.
-    vec3 ro        = params.camera_transform[3].xyz;
+    // STEP 3: Get camera vectors from the CORRECT inverse view matrix.
     vec3 cam_right = params.camera_transform[0].xyz;
-    vec3 cam_up    = params.camera_transform[1].xyz;    // <-- Use the standard up-vector, NOT negated.
-    vec3 cam_fwd   = -params.camera_transform[2].xyz;   // The camera looks down its local -Z axis.
+    vec3 cam_up    = params.camera_transform[1].xyz;    // <-- USE THE STANDARD, POSITIVE 'up' VECTOR.
+    vec3 cam_fwd   = -params.camera_transform[2].xyz;   // Camera looks down its local -Z axis.
 
-    // Step 4: Calculate the focal length from the vertical FOV.
+    // STEP 4: Calculate the focal length from the vertical FOV.
     float focal    = 1.0 / tan(params.fov_rad * 0.5);
 
-    // Step 5: Construct the final world-space ray direction and normalize it.
+    // STEP 5: Construct the final, stable world-space ray direction.
     vec3 rd        = normalize(cam_fwd * focal + cam_right * uv.x + cam_up * uv.y);
     
     return rd;
@@ -106,7 +103,7 @@ void main()
     float maxT     = (rawDepth < 1.0) ? camZ : 1e9;                      // stop at scene geometry
 
     vec3 ro = params.camera_transform[3].xyz;
-    vec3 rd = WorldRay(pix);
+    vec3 rd = WorldRay(vec2(pix));
 
     /* ray / cloud-slab intersection -------------------------------------------------------- */
     float t0, t1;
