@@ -1,0 +1,55 @@
+[gd_scene load_steps=9 format=3 uid="uid://ctfnemhqe8ww6"]
+
+[ext_resource type="Script" uid="uid://cdw4d72ok470d" path="res://scripts/compute_shader/compute_node.gd" id="1_ig7tw"]
+[ext_resource type="Script" uid="uid://npbifebldb3x" path="res://sprite_3d.gd" id="2_0xm2m"]
+[ext_resource type="Script" uid="uid://dbrhxr0lyi0rk" path="res://scripts/camera/camera_fly_mode.gd" id="2_h2yge"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_7dm0k"]
+sky_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
+ground_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
+
+[sub_resource type="Sky" id="Sky_ig7tw"]
+sky_material = SubResource("ProceduralSkyMaterial_7dm0k")
+
+[sub_resource type="Environment" id="Environment_0xm2m"]
+background_mode = 2
+sky = SubResource("Sky_ig7tw")
+tonemap_mode = 2
+ssao_enabled = true
+sdfgi_enabled = true
+glow_enabled = true
+
+[sub_resource type="BoxMesh" id="BoxMesh_h2yge"]
+
+[sub_resource type="Texture2DRD" id="Texture2DRD_h2yge"]
+
+[node name="Node3D" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_0xm2m")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.866025, -0.433013, 0.25, 0, 0.5, 0.866025, -0.5, 0.75, -0.433013, 0, 0, 0)
+shadow_enabled = true
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("BoxMesh_h2yge")
+
+[node name="ComputeNode" type="Node3D" parent="."]
+visible = false
+script = ExtResource("1_ig7tw")
+display_sprite_path = NodePath("../Camera3D/Sprite3D")
+camera_path = NodePath("../Camera3D")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(-0.993068, -0.0189863, -0.115999, 0, 0.986868, -0.161527, 0.117542, -0.160408, -0.980027, -0.312, -0.383, -2)
+script = ExtResource("2_h2yge")
+speed = 0.1
+
+[node name="Sprite3D" type="Sprite3D" parent="Camera3D"]
+process_mode = 3
+transform = Transform3D(-3.35409e-06, -1.42926e-07, 1, 1.14341e-06, 76.7327, 1.86265e-09, -76.7327, 1.14341e-06, -4.37114e-08, -7.45058e-09, 0, -1)
+billboard = 1
+texture = SubResource("Texture2DRD_h2yge")
+script = ExtResource("2_0xm2m")
