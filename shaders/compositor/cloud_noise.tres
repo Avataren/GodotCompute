@@ -3,11 +3,13 @@
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_rdm5j"]
 noise_type = 0
 seed = 135
+frequency = 0.0235
 
 [resource]
 width = 256
 height = 256
 depth = 256
 seamless = true
-seamless_blend_skirt = 0.103
+seamless_blend_skirt = 0.398
+normalize = false
 noise = SubResource("FastNoiseLite_rdm5j")

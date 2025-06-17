@@ -126,7 +126,7 @@ func _render_callback(_effect_callback_type: int, render_data: RenderData) -> vo
 func _fill_push_constants(cam_xform: Transform3D, fov_deg: float, screen: Vector2i, inv2w: float, inv3w: float) -> PackedByteArray:
 	var sun_dir  : Vector3 = Vector3(0.6,0.8,-0.5) 
 	var cloud_base  : float = 1200.0                
-	var cloud_top   : float = 2000.0
+	var cloud_top   : float = 3000.0
 
 	var f = PackedFloat32Array()
 	f.resize(28)                                    # 28 floats = 112 bytes

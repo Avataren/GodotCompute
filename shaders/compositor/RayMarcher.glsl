@@ -79,9 +79,9 @@ float Density(vec3 wpos)
 {
     float time = params.sun_time.w * 0.03;
     vec3 n = wpos * 0.0001;                    // scale controls cloud size
-    n.x+=time*0.11;
-    n.y+=time;
-    n.z+=time*0.3;
+    // n.x+=time*0.11;
+    // n.y+=time;
+    // n.z+=time*0.3;
     float d  = texture(noise_tex, n).r;
     d = mix(d, texture(noise_tex, n*2.0).r*0.5, 0.5);
     d = mix(d, texture(noise_tex, n*4.0).r*0.25,0.25);
@@ -128,18 +128,18 @@ void main()
         float t = t0 + (float(i)+Hash(float(i)+params.sun_time.w))*step;            // jitter
         vec3  pos = ro + rd*t;
         float dens = Density(pos);
-        dens = smoothstep(0.3, 0.8, dens);                               // threshold & thickening
+        dens = smoothstep(0.3, 1.1, dens);                               // threshold & thickening
         if(dens<=0.001) continue;
 
         /* cheap light probe – march 4 steps towards the sun */
-        float light = 1.0;
-        vec3 lpos = pos;
-        const int LIGHT_STEPS = 4;
-        const float lStep = 100.0;
-        for(int j=0;j<LIGHT_STEPS && light>0.05;j++){
-            lpos += sun_dir * lStep;
-            light *= 1.0 - Density(lpos)*0.6;
-        }
+        // float light = 1.0;
+        // vec3 lpos = pos;
+        // const int LIGHT_STEPS = 4;
+        // const float lStep = 100.0;
+        // for(int j=0;j<LIGHT_STEPS && light>0.05;j++){
+        //     lpos += sun_dir * lStep;
+        //     light *= 1.0 - Density(lpos)*0.6;
+        // }
 
         float phase = PhaseHG(dot(rd, sun_dir), 0.65);
         vec3  sampleCol = vec3(1.0,0.95,0.9);//*light*phase*5.0;            // tweak to taste
