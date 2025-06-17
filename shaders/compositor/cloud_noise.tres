@@ -2,8 +2,8 @@
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_rdm5j"]
 noise_type = 0
-seed = 135
-frequency = 0.0235
+seed = 650
+frequency = 0.0137
 
 [resource]
 width = 256

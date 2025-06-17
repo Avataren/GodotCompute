@@ -11,6 +11,11 @@ layout(set = 2, binding = 0) uniform sampler3D noise_tex;
 #define CLOUD_MIN params.cloud_heights.x
 #define CLOUD_MAX params.cloud_heights.y
 
+#define WIND_DIR      vec3(1.0, 0.0, 0.0)   // ← world-space direction (east)
+#define WIND_SPEED    35.0                  // ← metres per second
+#define EVOLUTION_RATE 0.75                 // ← 0 = static, 1 = very fast
+#define NOISE_SCALE 0.0001
+
 layout(push_constant, std430) uniform Params {
     mat4 camera_transform;
     vec4 sun_time;            //  4  (xyz = sun_dir, w = time)
@@ -23,6 +28,18 @@ layout(push_constant, std430) uniform Params {
 
 float Hash(float n){ return fract(sin(n)*43758.5453); }
 
+/* 0…1 mask that goes to 0 as the ray points toward the horizon */
+float HorizonMask(float rayY) {
+    // everything below -0.02 is already “under” the horizon, so keep ↘ simple
+    return smoothstep(0.00, 0.04, rayY);   //   0 @ horizon, 1 overhead
+}
+
+/* 0…1 mask that goes to 0 when 't' passes FADE_START → FADE_END  */
+float DistanceMask(float t) {
+    const float FADE_START = 6.0e4;   // start fading at 60 km
+    const float FADE_END   = 1.0e5;   // fully gone by 100 km
+    return 1.0 - clamp((t-FADE_START)/(FADE_END-FADE_START), 0.0, 1.0);
+}
 
 vec3 WorldRay(vec2 pix)
 {
@@ -47,6 +64,8 @@ vec3 WorldRay(vec2 pix)
     
     return rd;
 }
+
+
 
 bool SlabIntersect(vec3 ro, vec3 rd, out float t_enter, out float t_exit)
 {
@@ -77,15 +96,18 @@ bool SlabIntersect(vec3 ro, vec3 rd, out float t_enter, out float t_exit)
 /* simple FBM in a 3-D tile - returns [0,1] */
 float Density(vec3 wpos)
 {
-    float time = params.sun_time.w * 0.03;
-    vec3 n = wpos * 0.0001;                    // scale controls cloud size
-    // n.x+=time*0.11;
-    // n.y+=time;
-    // n.z+=time*0.3;
+    float t = WORLD_TIME;
+
+    vec3 n = wpos * NOISE_SCALE
+           + WIND_DIR * WIND_SPEED * t * NOISE_SCALE; // ← same scale
+
+    n.z += t * EVOLUTION_RATE * NOISE_SCALE;          // ← same scale
+
+    /* 4. Plain FBM */
     float d  = texture(noise_tex, n).r;
     d = mix(d, texture(noise_tex, n*2.0).r*0.5, 0.5);
     d = mix(d, texture(noise_tex, n*4.0).r*0.25,0.25);
-    return clamp(d,0.0,1.0);
+    return clamp(d, 0.0, 1.0);    
 }
 
 /* single-scattering lighting (cheap but convincing) */
@@ -129,6 +151,10 @@ void main()
         vec3  pos = ro + rd*t;
         float dens = Density(pos);
         dens = smoothstep(0.3, 1.1, dens);                               // threshold & thickening
+        /* fade clouds when the ray is low (horizon) and far away         */
+        float fadeMask = HorizonMask(rd.y*0.1) * DistanceMask(t);
+        dens *= fadeMask;
+    
         if(dens<=0.001) continue;
 
         /* cheap light probe – march 4 steps towards the sun */
@@ -157,4 +183,7 @@ void main()
     vec4 prev = imageLoad(screen_tex, ivec2(pix));
     vec3 outc = mix(sumColor, prev.rgb, trans);   // under-composite
     imageStore(screen_tex, ivec2(pix), vec4(outc,1.0));
+    //float fadeMask = HorizonMask(rd.y*0.01);
+    //vec3 debug = vec3(fadeMask);   // grayscale
+    //imageStore(screen_tex, ivec2(pix), vec4(debug,1.0));    
 }

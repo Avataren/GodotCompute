@@ -56,9 +56,7 @@ func _render_callback(_effect_callback_type: int, render_data: RenderData) -> vo
 	var x_groups : int = ceili(size.x / float(LOCAL_WORKGROUP_X))
 	var y_groups : int = ceili(size.y / float(LOCAL_WORKGROUP_Y))
 	
-	#var cam_xform : Transform3D = scene_data.get_cam_transform()
 	var view_matrix : Transform3D = scene_data.get_cam_transform()
-	var inv_view_matrix : Transform3D = view_matrix.affine_inverse()
 	var inv_proj_mat : Projection = scene_data.get_cam_projection().inverse()
 	
 	for view in scene_buffers.get_view_count():

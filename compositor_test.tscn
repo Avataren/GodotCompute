@@ -1,7 +1,8 @@
-[gd_scene load_steps=13 format=3 uid="uid://bmiuh4ws30gpr"]
+[gd_scene load_steps=14 format=3 uid="uid://bmiuh4ws30gpr"]
 
 [ext_resource type="Script" uid="uid://cr46qfqqofcj2" path="res://scripts/compositor/RayMarcher.gd" id="1_pb5tc"]
 [ext_resource type="Script" uid="uid://dbrhxr0lyi0rk" path="res://scripts/camera/camera_fly_mode.gd" id="2_b8pgq"]
+[ext_resource type="Script" uid="uid://c18wfdqxtivx3" path="res://scripts/util/fps.gd" id="3_vlriw"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1pauj"]
 sky_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
@@ -75,3 +76,26 @@ mesh = SubResource("BoxMesh_vlriw")
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(0.999349, -0.0169972, -0.0318302, 0, 0.882109, -0.471044, 0.0360841, 0.470737, 0.881535, -0.998682, -0.365713, 2.66816)
 script = ExtResource("2_b8pgq")
+
+[node name="Control" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("3_vlriw")
+
+[node name="Panel" type="Panel" parent="Control"]
+layout_mode = 0
+offset_right = 95.0
+offset_bottom = 40.0
+
+[node name="Label" type="Label" parent="Control/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "FPS:"
+horizontal_alignment = 1
+vertical_alignment = 1
