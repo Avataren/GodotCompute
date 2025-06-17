@@ -36,6 +36,7 @@ func _render_callback(_effect_callback_type: int, render_data: RenderData) -> vo
 	if not shader.is_valid(): load_shader()
 	
 	var scene_buffers : RenderSceneBuffersRD = render_data.get_render_scene_buffers()
+	var scene_data : RenderSceneData = render_data.get_render_scene_data()
 	if not scene_buffers: return
 	
 	var size: Vector2i = scene_buffers.get_internal_size()
@@ -44,8 +45,12 @@ func _render_callback(_effect_callback_type: int, render_data: RenderData) -> vo
 	var x_groups : int = ceili(size.x / float(LOCAL_WORKGROUP_X))
 	var y_groups : int = ceili(size.y / float(LOCAL_WORKGROUP_Y))
 	
+	var cam_xform : Transform3D = scene_data.get_cam_transform()
+	
 	for view in scene_buffers.get_view_count():
-		var push_constants := _fill_push_constants(Transform3D.IDENTITY, 1.0, size)
+		var proj : Projection = scene_data.get_view_projection(view)
+		var fov_deg : float  = proj.get_fov()
+		var push_constants := _fill_push_constants(cam_xform, fov_deg, size)
 		var screen_tex:RID = scene_buffers.get_color_layer(view)
 		var uniform :RDUniform = RDUniform.new()
 		uniform.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
