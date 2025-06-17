@@ -61,8 +61,6 @@ func _render_callback(_effect_callback_type: int, render_data: RenderData) -> vo
 	var inv_view_matrix : Transform3D = view_matrix.affine_inverse()
 	var inv_proj_mat : Projection = scene_data.get_cam_projection().inverse()
 	
-
-	
 	for view in scene_buffers.get_view_count():
 		var proj : Projection = scene_data.get_view_projection(view)
 		var hfov_deg : float = proj.get_fov()                    # horizontal
@@ -127,8 +125,8 @@ func _render_callback(_effect_callback_type: int, render_data: RenderData) -> vo
 	
 func _fill_push_constants(cam_xform: Transform3D, fov_deg: float, screen: Vector2i, inv2w: float, inv3w: float) -> PackedByteArray:
 	var sun_dir  : Vector3 = Vector3(0.6,0.8,-0.5) 
-	var cloud_base  : float = 800.0                
-	var cloud_top   : float = 1200.0
+	var cloud_base  : float = 1200.0                
+	var cloud_top   : float = 2000.0
 
 	var f = PackedFloat32Array()
 	f.resize(28)                                    # 28 floats = 112 bytes

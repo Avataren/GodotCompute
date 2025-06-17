@@ -77,8 +77,8 @@ bool SlabIntersect(vec3 ro, vec3 rd, out float t_enter, out float t_exit)
 /* simple FBM in a 3-D tile - returns [0,1] */
 float Density(vec3 wpos)
 {
-    float time = params.sun_time.w * 0.04;
-    vec3 n = wpos * 0.001;                    // scale controls cloud size
+    float time = params.sun_time.w * 0.03;
+    vec3 n = wpos * 0.0001;                    // scale controls cloud size
     n.x+=time*0.11;
     n.y+=time;
     n.z+=time*0.3;
@@ -100,7 +100,11 @@ void main()
     vec2 uv = vec2(pix) / params.screen_size;
     float rawDepth = texelFetch(depth_tex, ivec2(pix), 0).r;
     float camZ     = 1.0 / (rawDepth * params.inv_proj_2w + params.inv_proj_3w);   // metres in view space
-    float maxT     = (rawDepth < 1.0) ? camZ : 1e9;                      // stop at scene geometry
+
+    const float EPS = 1e-5;          // pick something sensible
+    bool has_hit = rawDepth > EPS;   // geometry ⇒ true, background ⇒ false
+
+    float maxT = has_hit ? camZ : 1e6;
 
     vec3 ro = params.camera_transform[3].xyz;
     vec3 rd = WorldRay(vec2(pix));
@@ -138,7 +142,7 @@ void main()
         }
 
         float phase = PhaseHG(dot(rd, sun_dir), 0.65);
-        vec3  sampleCol = vec3(1.0,0.95,0.9)*light*phase*5.0;            // tweak to taste
+        vec3  sampleCol = vec3(1.0,0.95,0.9);//*light*phase*5.0;            // tweak to taste
 
         float absorb = dens*step*0.02;                                   // 0.02 → thickness
         float a      = 1.0 - exp(-absorb);                               // alpha of this slice

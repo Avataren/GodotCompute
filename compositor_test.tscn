@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://bmiuh4ws30gpr"]
+[gd_scene load_steps=13 format=3 uid="uid://bmiuh4ws30gpr"]
 
 [ext_resource type="Script" uid="uid://cr46qfqqofcj2" path="res://scripts/compositor/RayMarcher.gd" id="1_pb5tc"]
 [ext_resource type="Script" uid="uid://dbrhxr0lyi0rk" path="res://scripts/camera/camera_fly_mode.gd" id="2_b8pgq"]
@@ -33,11 +33,19 @@ metadata/_custom_type_script = "uid://cr46qfqqofcj2"
 [sub_resource type="Compositor" id="Compositor_vlriw"]
 compositor_effects = Array[CompositorEffect]([SubResource("CompositorEffect_pb5tc")])
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_b8pgq"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_vlriw"]
+albedo_color = Color(0.462278, 0.000153922, 0.464021, 1)
+
 [sub_resource type="BoxMesh" id="BoxMesh_vlriw"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pb5tc"]
 transparency = 1
-albedo_color = Color(0.102226, 0.183217, 0.513746, 1)
+albedo_color = Color(0.101961, 0.184314, 0.513726, 0.878431)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pf0io"]
+albedo_color = Color(0.162068, 0.306757, 0.0685741, 1)
 
 [node name="Node3D" type="Node3D"]
 
@@ -50,6 +58,8 @@ transform = Transform3D(-0.866023, -0.433016, 0.250001, 0, 0.499998, 0.866027, -
 shadow_enabled = true
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+material_override = SubResource("StandardMaterial3D_b8pgq")
+material_overlay = SubResource("StandardMaterial3D_vlriw")
 mesh = SubResource("BoxMesh_vlriw")
 
 [node name="MeshInstance3D3" type="MeshInstance3D" parent="."]
@@ -59,6 +69,7 @@ mesh = SubResource("BoxMesh_vlriw")
 
 [node name="MeshInstance3D2" type="MeshInstance3D" parent="."]
 transform = Transform3D(22.5666, 0, 0, 0, 0.208915, 0, 0, 0, 17.8721, 0, -0.638978, 0)
+material_override = SubResource("StandardMaterial3D_pf0io")
 mesh = SubResource("BoxMesh_vlriw")
 
 [node name="Camera3D" type="Camera3D" parent="."]
