@@ -8,6 +8,8 @@ var rd : RenderingDevice
 var shader : RID
 var pipeline : RID
 
+var noise_3d : Texture3D = null
+		
 func _init():
 	RenderingServer.call_on_render_thread(initialize_compute_shader)
 	
@@ -21,6 +23,8 @@ func initialize_compute_shader():
 	if not rd: return
 	load_shader()
 	
+	noise_3d = ResourceLoader.load("res://shaders/compositor/cloud_noise.tres")
+	
 func clean_up():
 	if pipeline.is_valid(): rd.free_rid(pipeline)
 	if shader.is_valid(): rd.free_rid(shader)
@@ -33,6 +37,13 @@ func load_shader():
 	
 func _render_callback(_effect_callback_type: int, render_data: RenderData) -> void:
 	if not rd: return
+	if not noise_3d:
+		printerr("RayMarcher: noise_3d (Texture3D) is not assigned in the Inspector!")
+		return
+	var noise_texture_rid : RID = noise_3d.get_rid() # Get the RID once
+	if not noise_texture_rid.is_valid():
+		printerr("RayMarcher: noise_3d.get_rid() returned an invalid RID. The Texture3D might be malformed or not properly loaded.")
+		return
 	if not shader.is_valid(): load_shader()
 	
 	var scene_buffers : RenderSceneBuffersRD = render_data.get_render_scene_buffers()
@@ -45,13 +56,14 @@ func _render_callback(_effect_callback_type: int, render_data: RenderData) -> vo
 	var x_groups : int = ceili(size.x / float(LOCAL_WORKGROUP_X))
 	var y_groups : int = ceili(size.y / float(LOCAL_WORKGROUP_Y))
 	
-	var cam_xform : Transform3D = scene_data.get_cam_transform()
+	#var cam_xform : Transform3D = scene_data.get_cam_transform()
+	var view_matrix : Transform3D = scene_data.get_cam_transform()
 	var inv_proj_mat : Projection = scene_data.get_cam_projection().inverse()
 	
 	for view in scene_buffers.get_view_count():
 		var proj : Projection = scene_data.get_view_projection(view)
 		var fov_deg : float  = proj.get_fov()
-		var push_constants := _fill_push_constants(cam_xform, fov_deg, size, inv_proj_mat[2].w, inv_proj_mat[3].w)
+		var push_constants := _fill_push_constants(view_matrix, fov_deg, size, inv_proj_mat[2].w, inv_proj_mat[3].w)
 		var screen_tex:RID = scene_buffers.get_color_layer(view)
 		var depth_tex:RID = scene_buffers.get_depth_layer(view)
 		
@@ -66,62 +78,73 @@ func _render_callback(_effect_callback_type: int, render_data: RenderData) -> vo
 		#else:
 		image_uniform_set = UniformSetCacheRD.get_cache(shader, 0, [uniform])
 		
-		var sampler_state : RDSamplerState = RDSamplerState.new()
+		var sampler_state := RDSamplerState.new()
 		sampler_state.min_filter = RenderingDevice.SAMPLER_FILTER_LINEAR
 		sampler_state.mag_filter = RenderingDevice.SAMPLER_FILTER_LINEAR
-		var sampler : RID = rd.sampler_create(sampler_state)
-		
-		uniform = RDUniform.new()
-		uniform.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
-		uniform.binding = 0
-		uniform.add_id(sampler)
-		uniform.add_id(depth_tex)
-		
-		var depth_uniform_set:RID = UniformSetCacheRD.get_cache(shader, 1, [uniform])
+
+		#-- depth sampler --------------------------------------------------------
+		var depth_sampler : RID = rd.sampler_create(sampler_state)
+
+		var u_depth := RDUniform.new()
+		u_depth.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+		u_depth.binding = 0
+		u_depth.add_id(depth_sampler)
+		u_depth.add_id(depth_tex)
+
+		#-- noise sampler --------------------------------------------------------
+		var noise_sampler_state := RDSamplerState.new()
+		noise_sampler_state.min_filter = RenderingDevice.SAMPLER_FILTER_LINEAR
+		noise_sampler_state.mag_filter = RenderingDevice.SAMPLER_FILTER_LINEAR
+		noise_sampler_state.repeat_u = RenderingDevice.SamplerRepeatMode.SAMPLER_REPEAT_MODE_REPEAT
+		noise_sampler_state.repeat_v = RenderingDevice.SamplerRepeatMode.SAMPLER_REPEAT_MODE_REPEAT
+		noise_sampler_state.repeat_w = RenderingDevice.SamplerRepeatMode.SAMPLER_REPEAT_MODE_REPEAT
+		var noise_sampler : RID = rd.sampler_create(noise_sampler_state)
+
+		var u_noise := RDUniform.new()
+		u_noise.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+		u_noise.binding = 0
+		u_noise.add_id(noise_sampler)
+		u_noise.add_id(RenderingServer.texture_get_rd_texture(noise_texture_rid))
+
+		#-- one uniform-set, two bindings (0 = depth, 1 = noise) -----------------
+		var depth_uniform_set : RID = UniformSetCacheRD.get_cache(shader, 1, [u_depth])
+		var noise_uniform_set : RID = UniformSetCacheRD.get_cache(shader, 2, [u_noise])
 		
 		var compute_list :int = rd.compute_list_begin()
 		rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
 		rd.compute_list_bind_uniform_set(compute_list, image_uniform_set, 0)
 		rd.compute_list_bind_uniform_set(compute_list, depth_uniform_set, 1)
+		rd.compute_list_bind_uniform_set(compute_list, noise_uniform_set, 2)
 		rd.compute_list_set_push_constant(compute_list, push_constants, push_constants.size())
 		rd.compute_list_dispatch(compute_list, x_groups, y_groups,1)
 		rd.compute_list_end()
 	
-func _fill_push_constants(cam_xform: Transform3D, fov: float,  screen_size: Vector2i, inv_proj2w: float, inv_proj3w: float) -> PackedByteArray:
-	# Get the camera's full transform.
+func _fill_push_constants(cam_xform: Transform3D, fov_deg: float, screen: Vector2i, inv2w: float, inv3w: float) -> PackedByteArray:
+	var sun_dir  : Vector3 = Vector3(0.6,0.8,-0.5) 
+	var cloud_base  : float = 500.0                
+	var cloud_top   : float = 600.0
 
-	var floats = PackedFloat32Array()
-	floats.resize(24)
-	# Column 0 (Basis X vector)
-	floats[0] = cam_xform.basis.x.x
-	floats[1] = cam_xform.basis.x.y
-	floats[2] = cam_xform.basis.x.z
-	floats[3] = 0.0
-	# Column 1 (Basis Y vector)
-	floats[4] = cam_xform.basis.y.x
-	floats[5] = cam_xform.basis.y.y
-	floats[6] = cam_xform.basis.y.z
-	floats[7] = 0.0
-	# Column 2 (Basis Z vector)
-	floats[8] = cam_xform.basis.z.x
-	floats[9] = cam_xform.basis.z.y
-	floats[10] = cam_xform.basis.z.z
-	floats[11] = 0.0
-	# Column 3 (Origin/Translation vector)
-	floats[12] = cam_xform.origin.x
-	floats[13] = cam_xform.origin.y
-	floats[14] = cam_xform.origin.z
-	floats[15] = 1.0
-	# --- 2. Params.texture_size (vec2) - 8 bytes (Floats 16-17) ---
-	floats[16] = screen_size.x
-	floats[17] = screen_size.y
-	# --- 3. Params.fov_rad (float) - 4 bytes (Float 18) ---
-	floats[18] = deg_to_rad(fov)
-	floats[19] = inv_proj2w
-	floats[20] = inv_proj3w
-	floats[21] = 0.0
-	floats[22] = 0.0
-	floats[23] = 0.0
+	var f = PackedFloat32Array()
+	f.resize(28)                                    # 28 floats = 112 bytes
 	
+	# --- USE THE ORIGINAL, STANDARD, COLUMN-MAJOR PACKING ---
+	f[ 0] = cam_xform.basis.x.x; f[ 1] = cam_xform.basis.x.y; f[ 2] = cam_xform.basis.x.z; f[ 3] = 0.0
+	f[ 4] = cam_xform.basis.y.x; f[ 5] = cam_xform.basis.y.y; f[ 6] = cam_xform.basis.y.z; f[ 7] = 0.0
+	f[ 8] = cam_xform.basis.z.x; f[ 9] = cam_xform.basis.z.y; f[10] = cam_xform.basis.z.z; f[11] = 0.0
+	f[12] = cam_xform.origin.x;  f[13] = cam_xform.origin.y;  f[14] = cam_xform.origin.z;  f[15] = 1.0
+	
+	# --- The rest of the push constants ---
+	f[16] = sun_dir.x
+	f[17] = sun_dir.y
+	f[18] = sun_dir.z
+	f[19] = Time.get_ticks_msec() / 1000.0
+	f[20] = cloud_base
+	f[21] = cloud_top
+	f[22] = float(screen.x)
+	f[23] = float(screen.y)
+	f[24] = deg_to_rad(fov_deg)
+	f[25] = inv2w
+	f[26] = inv3w
+	f[27] = 0.0
 
-	return floats.to_byte_array()
+	return f.to_byte_array()
