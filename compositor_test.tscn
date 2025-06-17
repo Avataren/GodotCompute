@@ -1,0 +1,51 @@
+[gd_scene load_steps=8 format=3 uid="uid://bmiuh4ws30gpr"]
+
+[ext_resource type="Script" uid="uid://cr46qfqqofcj2" path="res://scripts/compositor/RayMarcher.gd" id="1_pb5tc"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1pauj"]
+sky_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
+ground_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
+
+[sub_resource type="Sky" id="Sky_pb5tc"]
+sky_material = SubResource("ProceduralSkyMaterial_1pauj")
+
+[sub_resource type="Environment" id="Environment_b8pgq"]
+background_mode = 2
+sky = SubResource("Sky_pb5tc")
+tonemap_mode = 2
+ssao_enabled = true
+sdfgi_enabled = true
+glow_enabled = true
+
+[sub_resource type="CompositorEffect" id="CompositorEffect_pb5tc"]
+resource_local_to_scene = false
+resource_name = ""
+enabled = true
+effect_callback_type = 3
+access_resolved_color = false
+access_resolved_depth = false
+needs_motion_vectors = false
+needs_normal_roughness = false
+script = ExtResource("1_pb5tc")
+metadata/_custom_type_script = "uid://cr46qfqqofcj2"
+
+[sub_resource type="Compositor" id="Compositor_vlriw"]
+compositor_effects = Array[CompositorEffect]([SubResource("CompositorEffect_pb5tc")])
+
+[sub_resource type="BoxMesh" id="BoxMesh_vlriw"]
+
+[node name="Node3D" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_b8pgq")
+compositor = SubResource("Compositor_vlriw")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.866023, -0.433016, 0.250001, 0, 0.499998, 0.866027, -0.500003, 0.749999, -0.43301, 0, 0, 0)
+shadow_enabled = true
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_vlriw")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.871232, -0.1324, 0.472679, 0, 0.962937, 0.269725, -0.490872, -0.234993, 0.838942, 2.46824, 1.18967, 4.26243)

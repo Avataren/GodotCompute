@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://cffom22hi6t00"
+path="res://.godot/imported/RayMarcher.glsl-61eb9e58a8345bd5118aeb812f5f2d7f.res"
+
+[deps]
+
+source_file="res://shaders/compositor/RayMarcher.glsl"
+dest_files=["res://.godot/imported/RayMarcher.glsl-61eb9e58a8345bd5118aeb812f5f2d7f.res"]
+
+[params]
+
