@@ -1,23 +1,28 @@
-[gd_scene load_steps=14 format=3 uid="uid://bmiuh4ws30gpr"]
+[gd_scene load_steps=16 format=3 uid="uid://bmiuh4ws30gpr"]
 
 [ext_resource type="Script" uid="uid://cr46qfqqofcj2" path="res://scripts/compositor/RayMarcher.gd" id="1_pb5tc"]
+[ext_resource type="Texture2D" uid="uid://bikd4d0bqorvg" path="res://hdri/autumn_field_4k.exr" id="1_pf0io"]
 [ext_resource type="Script" uid="uid://dbrhxr0lyi0rk" path="res://scripts/camera/camera_fly_mode.gd" id="2_b8pgq"]
 [ext_resource type="Script" uid="uid://c18wfdqxtivx3" path="res://scripts/util/fps.gd" id="3_vlriw"]
 
-[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1pauj"]
-sky_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
-ground_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_gycck"]
+panorama = ExtResource("1_pf0io")
 
 [sub_resource type="Sky" id="Sky_pb5tc"]
-sky_material = SubResource("ProceduralSkyMaterial_1pauj")
+sky_material = SubResource("PanoramaSkyMaterial_gycck")
 
 [sub_resource type="Environment" id="Environment_b8pgq"]
 background_mode = 2
 sky = SubResource("Sky_pb5tc")
+ambient_light_source = 3
 tonemap_mode = 2
 ssao_enabled = true
 sdfgi_enabled = true
 glow_enabled = true
+adjustment_enabled = true
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_pf0io"]
+exposure_multiplier = 0.5
 
 [sub_resource type="CompositorEffect" id="CompositorEffect_pb5tc"]
 resource_local_to_scene = false
@@ -52,6 +57,7 @@ albedo_color = Color(0.162068, 0.306757, 0.0685741, 1)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_b8pgq")
+camera_attributes = SubResource("CameraAttributesPractical_pf0io")
 compositor = SubResource("Compositor_vlriw")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]

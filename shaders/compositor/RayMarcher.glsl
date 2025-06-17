@@ -12,8 +12,8 @@ layout(set = 2, binding = 0) uniform sampler3D noise_tex;
 #define CLOUD_MAX params.cloud_heights.y
 
 #define WIND_DIR      vec3(1.0, 0.0, 0.0)   // ← world-space direction (east)
-#define WIND_SPEED    35.0                  // ← metres per second
-#define EVOLUTION_RATE 0.75                 // ← 0 = static, 1 = very fast
+#define WIND_SPEED    45.0                  // ← metres per second
+#define EVOLUTION_RATE 5.75                 // ← 0 = static, 1 = very fast
 #define NOISE_SCALE 0.0001
 
 layout(push_constant, std430) uniform Params {
@@ -36,7 +36,7 @@ float HorizonMask(float rayY) {
 
 /* 0…1 mask that goes to 0 when 't' passes FADE_START → FADE_END  */
 float DistanceMask(float t) {
-    const float FADE_START = 6.0e4;   // start fading at 60 km
+    const float FADE_START = 1.0e4;   // start fading at 60 km
     const float FADE_END   = 1.0e5;   // fully gone by 100 km
     return 1.0 - clamp((t-FADE_START)/(FADE_END-FADE_START), 0.0, 1.0);
 }
@@ -138,7 +138,7 @@ void main()
     t1 = min(t1, maxT);                                                  // clip by geometry
 
     /* volumetric integration -------------------------------------------------------------- */
-    const int   STEPS = 300;
+    const int   STEPS = 128;
     float step = (t1-t0)/float(STEPS);
     vec3  sumColor = vec3(0.0);
     float trans    = 1.0;                                                // accumulated transmittance
@@ -152,7 +152,7 @@ void main()
         float dens = Density(pos);
         dens = smoothstep(0.3, 1.1, dens);                               // threshold & thickening
         /* fade clouds when the ray is low (horizon) and far away         */
-        float fadeMask = HorizonMask(rd.y*0.1) * DistanceMask(t);
+        float fadeMask = HorizonMask(rd.y*0.05) * DistanceMask(t);
         dens *= fadeMask;
     
         if(dens<=0.001) continue;
