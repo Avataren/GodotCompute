@@ -47,5 +47,9 @@ shadow_enabled = true
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 mesh = SubResource("BoxMesh_vlriw")
 
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="."]
+transform = Transform3D(22.5666, 0, 0, 0, 0.208915, 0, 0, 0, 17.8721, 0, -0.638978, 0)
+mesh = SubResource("BoxMesh_vlriw")
+
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(0.871232, -0.1324, 0.472679, 0, 0.962937, 0.269725, -0.490872, -0.234993, 0.838942, 2.46824, 1.18967, 4.26243)
+transform = Transform3D(-0.865161, -0.0493545, 0.49906, 0, 0.995145, 0.0984148, -0.501495, 0.0851447, -0.860961, 1.86847, 0.238011, -2.2596)
