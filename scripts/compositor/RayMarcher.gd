@@ -4,14 +4,20 @@ class_name RayMarcher extends CompositorEffect
 const LOCAL_WORKGROUP_X: int = 16
 const LOCAL_WORKGROUP_Y: int = 16
 
+var sun_direction : Vector3 = Vector3(0,1,0)
+@export var sky_cubemap : Texture = null 
+@export var noise_3d : Texture3D = null
+@export var cloud_base  : float = 2000.0                
+@export var cloud_top   : float = 3000.0
 var rd : RenderingDevice
 var shader : RID
 var pipeline : RID
 
-var noise_3d : Texture3D = null
-		
 func _init():
 	RenderingServer.call_on_render_thread(initialize_compute_shader)
+	
+func set_sun_direction(dir:Vector3):
+	sun_direction = dir
 	
 func _notification(what: int):
 	if what == NOTIFICATION_PREDELETE:
@@ -22,8 +28,8 @@ func initialize_compute_shader():
 	rd = RenderingServer.get_rendering_device()
 	if not rd: return
 	load_shader()
-	
-	noise_3d = ResourceLoader.load("res://shaders/compositor/cloud_noise.tres")
+	#if not noise_3d:
+	#	noise_3d = ResourceLoader.load("res://shaders/compositor/cloud_noise.tres")
 	
 func clean_up():
 	if pipeline.is_valid(): rd.free_rid(pipeline)
@@ -48,6 +54,7 @@ func _render_callback(_effect_callback_type: int, render_data: RenderData) -> vo
 	
 	var scene_buffers : RenderSceneBuffersRD = render_data.get_render_scene_buffers()
 	var scene_data : RenderSceneData = render_data.get_render_scene_data()
+	
 	if not scene_buffers: return
 	
 	var size: Vector2i = scene_buffers.get_internal_size()
@@ -111,21 +118,35 @@ func _render_callback(_effect_callback_type: int, render_data: RenderData) -> vo
 		#-- one uniform-set, two bindings (0 = depth, 1 = noise) -----------------
 		var depth_uniform_set : RID = UniformSetCacheRD.get_cache(shader, 1, [u_depth])
 		var noise_uniform_set : RID = UniformSetCacheRD.get_cache(shader, 2, [u_noise])
+		var sky_uniform_set : RID = RID()        # invalid → skip bind later
+		if sky_cubemap:
+			var sky_sampler_state := RDSamplerState.new()
+			sky_sampler_state.min_filter = RenderingDevice.SAMPLER_FILTER_LINEAR
+			sky_sampler_state.mag_filter = RenderingDevice.SAMPLER_FILTER_LINEAR
+			sky_sampler_state.repeat_u   = RenderingDevice.SamplerRepeatMode.SAMPLER_REPEAT_MODE_CLAMP_TO_EDGE
+			sky_sampler_state.repeat_v   = RenderingDevice.SamplerRepeatMode.SAMPLER_REPEAT_MODE_CLAMP_TO_EDGE
+			sky_sampler_state.repeat_w   = RenderingDevice.SamplerRepeatMode.SAMPLER_REPEAT_MODE_CLAMP_TO_EDGE
+
+			var sky_sampler : RID = rd.sampler_create(sky_sampler_state)
+
+			var u_sky := RDUniform.new()
+			u_sky.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+			u_sky.binding      = 0                   # binding 0 inside set 3
+			u_sky.add_id(sky_sampler)
+			u_sky.add_id(RenderingServer.texture_get_rd_texture(sky_cubemap.get_rid()))
+			sky_uniform_set = UniformSetCacheRD.get_cache(shader, 3, [u_sky])
 		
 		var compute_list :int = rd.compute_list_begin()
 		rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
 		rd.compute_list_bind_uniform_set(compute_list, image_uniform_set, 0)
 		rd.compute_list_bind_uniform_set(compute_list, depth_uniform_set, 1)
 		rd.compute_list_bind_uniform_set(compute_list, noise_uniform_set, 2)
+		rd.compute_list_bind_uniform_set(compute_list, sky_uniform_set, 3)
 		rd.compute_list_set_push_constant(compute_list, push_constants, push_constants.size())
 		rd.compute_list_dispatch(compute_list, x_groups, y_groups,1)
 		rd.compute_list_end()
 	
 func _fill_push_constants(cam_xform: Transform3D, fov_deg: float, screen: Vector2i, inv2w: float, inv3w: float) -> PackedByteArray:
-	var sun_dir  : Vector3 = Vector3(0.6,0.8,-0.5) 
-	var cloud_base  : float = 1200.0                
-	var cloud_top   : float = 3000.0
-
 	var f = PackedFloat32Array()
 	f.resize(28)                                    # 28 floats = 112 bytes
 	
@@ -136,9 +157,9 @@ func _fill_push_constants(cam_xform: Transform3D, fov_deg: float, screen: Vector
 	f[12] = cam_xform.origin.x;  f[13] = cam_xform.origin.y;  f[14] = cam_xform.origin.z;  f[15] = 1.0
 	
 	# --- The rest of the push constants ---
-	f[16] = sun_dir.x
-	f[17] = sun_dir.y
-	f[18] = sun_dir.z
+	f[16] = sun_direction.x
+	f[17] = sun_direction.y
+	f[18] = sun_direction.z
 	f[19] = Time.get_ticks_msec() / 1000.0
 	f[20] = cloud_base
 	f[21] = cloud_top

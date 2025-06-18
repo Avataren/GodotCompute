@@ -1,189 +1,202 @@
 #[compute]
 #version 450
+#extension GL_EXT_nonuniform_qualifier           : enable
+#extension GL_EXT_samplerless_texture_functions : enable
+
+/*────────────────────────────────────────────────────────────────────────────*/
+/* Godot 4.4 – volumetric clouds with silver rim + correctly dark undersides */
+/*────────────────────────────────────────────────────────────────────────────*/
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
-layout(rgba16f, binding = 0, set = 0) uniform image2D screen_tex;
-layout(set = 1, binding = 0) uniform sampler2D depth_tex;
-layout(set = 2, binding = 0) uniform sampler3D noise_tex;
 
-#define SUN_DIR   normalize(params.sun_time.xyz)
-#define WORLD_TIME params.sun_time.w
-#define CLOUD_MIN params.cloud_heights.x
-#define CLOUD_MAX params.cloud_heights.y
+/* ── bindings ───────────────────────────────────────────────────────────── */
+layout(rgba16f, binding = 0, set = 0) uniform image2D  screen_tex;
+layout(binding   = 0, set = 1)          uniform sampler2D  depth_tex;
+layout(binding   = 0, set = 2)          uniform sampler3D  noise_tex;
+layout(binding   = 0, set = 3)          uniform samplerCube sky_cubemap;
 
-#define WIND_DIR      vec3(1.0, 0.0, 0.0)   // ← world-space direction (east)
-#define WIND_SPEED    45.0                  // ← metres per second
-#define EVOLUTION_RATE 5.75                 // ← 0 = static, 1 = very fast
-#define NOISE_SCALE 0.0001
-
+/* ── push constants (from Godot) ─────────────────────────────────────────── */
 layout(push_constant, std430) uniform Params {
-    mat4 camera_transform;
-    vec4 sun_time;            //  4  (xyz = sun_dir, w = time)
-    vec2 cloud_heights;       //  2  (x = base, y = top)    
-    vec2 screen_size;
+    mat4  camera_transform;
+    vec4  sun_time;              /* xyz = sun dir (unit), w = seconds     */
+    vec2  cloud_heights;         /* x = base, y = top (metres)            */
+    vec2  screen_size;
     float fov_rad;
     float inv_proj_2w;
     float inv_proj_3w;
 } params;
 
+/* ── tunables ───────────────────────────────────────────────────────────── */
+#define SUN_ENERGY        20.0
+#define AMBIENT_STRENGTH   0.20
+
+#define WIND_DIR          vec3(1.0,0.0,0.0)
+#define WIND_SPEED        45.0
+#define EVOLUTION_RATE    5.75
+#define NOISE_SCALE       0.0001
+#define SCATTERING_COEFF  0.05  /* Controls brightness AND opacity. Higher = brighter, denser clouds. */
+#define ABSORPTION_COEFF  0.001  /* Light lost in the medium. Higher = darker, "stormier" clouds. */
+
+#define UNDERSIDE_FADE_HEIGHT 0.1  /* 0-1, how far up the darkness extends */
+#define RIM_LIGHT_INTENSITY   10.0  /* How bright the silver lining is     */
+#define AMBIENT_MULTIPLIER    0.65  /* Control ambient light contribution */
+
+/* rim-light */
+#define RIM_SAMPLE_DIST   60.0
+#define RIM_FADE_START     0.15
+#define RIM_FADE_END       0.55
+
+/* underside attenuation */
+#define UNDER_MIN_BRIGHT   0.12   /* 0 = totally black, 1 = no dim         */
+#define OVERBURDEN_STEPS        4  /* upward probes                         */
+#define OVERBURDEN_STEP_DIST   12.5/* metres per probe                      */
+#define OVER_TAU_SCALE        0.7  /* scale factor for “mass” → dimming     */
+
+/* shorthand */
+#define SUN_DIR       normalize(params.sun_time.xyz)
+#define WORLD_TIME    params.sun_time.w
+#define CLOUD_MIN     params.cloud_heights.x
+#define CLOUD_MAX     params.cloud_heights.y
+
+/* ── helpers ───────────────────────────────────────────────────────────────*/
 float Hash(float n){ return fract(sin(n)*43758.5453); }
 
-/* 0…1 mask that goes to 0 as the ray points toward the horizon */
-float HorizonMask(float rayY) {
-    // everything below -0.02 is already “under” the horizon, so keep ↘ simple
-    return smoothstep(0.00, 0.04, rayY);   //   0 @ horizon, 1 overhead
+float HorizonMask(float y){ return smoothstep(0.00,0.04,y); }
+float DistanceMask(float t){
+    const float S=1.0e4,E=1.0e5;
+    return 1.0-clamp((t-S)/(E-S),0.0,1.0);
 }
 
-/* 0…1 mask that goes to 0 when 't' passes FADE_START → FADE_END  */
-float DistanceMask(float t) {
-    const float FADE_START = 1.0e4;   // start fading at 60 km
-    const float FADE_END   = 1.0e5;   // fully gone by 100 km
-    return 1.0 - clamp((t-FADE_START)/(FADE_END-FADE_START), 0.0, 1.0);
+vec3 WorldRay(vec2 pix){
+    vec2 flip = vec2(pix.x, params.screen_size.y-pix.y);
+    vec2 uv = (2.0*flip-params.screen_size)/params.screen_size.y;
+
+    vec3 r = params.camera_transform[0].xyz;
+    vec3 u = params.camera_transform[1].xyz;
+    vec3 f =-params.camera_transform[2].xyz;
+    float focal = 1.0/tan(params.fov_rad*0.5);
+    return normalize(f*focal + r*uv.x + u*uv.y);
 }
 
-vec3 WorldRay(vec2 pix)
-{
-    // STEP 1: Flip the pixel's Y-coordinate. This is the standard and robust way
-    // to match screen space (Y-down) to a 3D world's NDC space (Y-up).
-    // This is what your working Menger shader does.
-    vec2 flipped_pix = vec2(pix.x, params.screen_size.y - pix.y);
-
-    // STEP 2: Calculate UVs using the CORRECTED coordinates and handle aspect ratio.
-    vec2 uv = (2.0 * flipped_pix - params.screen_size) / params.screen_size.y;
-
-    // STEP 3: Get camera vectors from the CORRECT inverse view matrix.
-    vec3 cam_right = params.camera_transform[0].xyz;
-    vec3 cam_up    = params.camera_transform[1].xyz;    // <-- USE THE STANDARD, POSITIVE 'up' VECTOR.
-    vec3 cam_fwd   = -params.camera_transform[2].xyz;   // Camera looks down its local -Z axis.
-
-    // STEP 4: Calculate the focal length from the vertical FOV.
-    float focal    = 1.0 / tan(params.fov_rad * 0.5);
-
-    // STEP 5: Construct the final, stable world-space ray direction.
-    vec3 rd        = normalize(cam_fwd * focal + cam_right * uv.x + cam_up * uv.y);
-    
-    return rd;
-}
-
-
-
-bool SlabIntersect(vec3 ro, vec3 rd, out float t_enter, out float t_exit)
-{
-    // If the ray is nearly parallel to the cloud slab (the source of the black circle)
-    if (abs(rd.y) < 0.0001) {
-        // If the camera is not inside the cloud layer, it can never hit
-        if (ro.y < CLOUD_MIN || ro.y > CLOUD_MAX) {
-            t_enter = 0.0;
-            t_exit = -1.0; // Negative exit signifies no intersection
-            return false;
-        }
-        // If the camera is inside the slab, the intersection starts immediately
-        // and extends for a very long distance.
-        else {
-            t_enter = 0.0;
-            t_exit = 1e9; // A very large number
-            return true;
-        }
+bool SlabIntersect(vec3 ro, vec3 rd, out float t0,out float t1){
+    if(abs(rd.y)<0.0001){
+        if(ro.y<CLOUD_MIN||ro.y>CLOUD_MAX){t1=-1.0;return false;}
+        t0=0.0; t1=1e9; return true;
     }
-
-    float h1 = (CLOUD_MIN - ro.y) / rd.y;
-    float h2 = (CLOUD_MAX - ro.y) / rd.y;
-    t_enter  = max(0.0, min(h1, h2));
-    t_exit   = max(h1, h2);
-    return t_exit > t_enter;
+    float h1=(CLOUD_MIN-ro.y)/rd.y;
+    float h2=(CLOUD_MAX-ro.y)/rd.y;
+    t0=max(0.0,min(h1,h2));
+    t1=max(h1,h2);
+    return t1>t0;
 }
 
-/* simple FBM in a 3-D tile - returns [0,1] */
-float Density(vec3 wpos)
-{
-    float t = WORLD_TIME;
-
-    vec3 n = wpos * NOISE_SCALE
-           + WIND_DIR * WIND_SPEED * t * NOISE_SCALE; // ← same scale
-
-    n.z += t * EVOLUTION_RATE * NOISE_SCALE;          // ← same scale
-
-    /* 4. Plain FBM */
-    float d  = texture(noise_tex, n).r;
-    d = mix(d, texture(noise_tex, n*2.0).r*0.5, 0.5);
-    d = mix(d, texture(noise_tex, n*4.0).r*0.25,0.25);
-    return clamp(d, 0.0, 1.0);    
+float Density(vec3 p){
+    vec3 n=p*NOISE_SCALE+WIND_DIR*WIND_SPEED*WORLD_TIME*NOISE_SCALE;
+    n.z+=WORLD_TIME*EVOLUTION_RATE*NOISE_SCALE;
+    float d = texture(noise_tex,n).r;
+    d=mix(d,texture(noise_tex,n*2.0).r*0.5,0.5);
+    d=mix(d,texture(noise_tex,n*4.0).r*0.25,0.25);
+    return clamp(d,0.0,1.0);
 }
 
-/* single-scattering lighting (cheap but convincing) */
-float PhaseHG(float cosTheta, float g){ return (1.0-g*g)/pow(1.0+g*g-2.0*g*cosTheta,1.5); }
+float PhaseHG(float c,float g){
+    return (1.0-g*g)/pow(max(1.0+g*g-2.0*g*c,1e-3),1.5);
+}
+float PhaseHG_Safe(float c,float g){
+    c=clamp(c,-0.999,0.999);
+    return PhaseHG(c,g);
+}
 
-/* -------------------------------------------------------------------------- */
-void main()
-{
-    uvec2 pix = gl_GlobalInvocationID.xy;
-    if(pix.x >= uint(params.screen_size.x) || pix.y >= uint(params.screen_size.y)) return;
+/* ── kernel ─────────────────────────────────────────────────────────────── */
+void main(){
+    uvec2 pix=gl_GlobalInvocationID.xy;
+    if(pix.x>=uint(params.screen_size.x)||pix.y>=uint(params.screen_size.y)) return;
 
-    vec2 uv = vec2(pix) / params.screen_size;
-    float rawDepth = texelFetch(depth_tex, ivec2(pix), 0).r;
-    float camZ     = 1.0 / (rawDepth * params.inv_proj_2w + params.inv_proj_3w);   // metres in view space
+    float raw=texelFetch(depth_tex,ivec2(pix),0).r;
+    float camZ=1.0/(raw*params.inv_proj_2w+params.inv_proj_3w);
+    float maxT=(raw>1e-5)?camZ:1e6;
 
-    const float EPS = 1e-5;          // pick something sensible
-    bool has_hit = rawDepth > EPS;   // geometry ⇒ true, background ⇒ false
+    vec3 ro=params.camera_transform[3].xyz;
+    vec3 rd=WorldRay(vec2(pix));
 
-    float maxT = has_hit ? camZ : 1e6;
+    float t0,t1;
+    if(!SlabIntersect(ro,rd,t0,t1)||t0>maxT||(t1-t0)<5.0) return;
+    t1=min(t1,maxT);
 
-    vec3 ro = params.camera_transform[3].xyz;
-    vec3 rd = WorldRay(vec2(pix));
+    const int STEPS=96;
+    float step=(t1-t0)/float(STEPS);
+    vec3 sumCol=vec3(0.0);
+    float trans=1.0;
 
-    /* ray / cloud-slab intersection -------------------------------------------------------- */
-    float t0, t1;
-    if(!SlabIntersect(ro, rd, t0, t1) || t0 > maxT) return;              // no clouds on this ray
+    const float EXTINCTION_COEFF = SCATTERING_COEFF + ABSORPTION_COEFF;
 
-    t1 = min(t1, maxT);                                                  // clip by geometry
+    for(int i=0;i<STEPS&&trans>0.01;++i){
+        float jitter=Hash(float(i)+WORLD_TIME);
+        float t=t0+(float(i)+jitter)*step;
+        vec3 pos=ro+rd*t;
 
-    /* volumetric integration -------------------------------------------------------------- */
-    const int   STEPS = 128;
-    float step = (t1-t0)/float(STEPS);
-    vec3  sumColor = vec3(0.0);
-    float trans    = 1.0;                                                // accumulated transmittance
-    vec3 sun_dir = params.sun_time.xyz;
-    float steps = 0;
-    for(int i=0;i<STEPS && trans>0.01;i++)
-    {
-        steps += 1.0;
-        float t = t0 + (float(i)+Hash(float(i)+params.sun_time.w))*step;            // jitter
-        vec3  pos = ro + rd*t;
-        float dens = Density(pos);
-        dens = smoothstep(0.3, 1.1, dens);                               // threshold & thickening
-        /* fade clouds when the ray is low (horizon) and far away         */
-        float fadeMask = HorizonMask(rd.y*0.05) * DistanceMask(t);
-        dens *= fadeMask;
-    
+        float dens=Density(pos);
+        dens=smoothstep(0.30,1.10,dens);
+        dens*=HorizonMask(rd.y*0.05)*DistanceMask(t);
         if(dens<=0.001) continue;
 
-        /* cheap light probe – march 4 steps towards the sun */
-        // float light = 1.0;
-        // vec3 lpos = pos;
-        // const int LIGHT_STEPS = 4;
-        // const float lStep = 100.0;
-        // for(int j=0;j<LIGHT_STEPS && light>0.05;j++){
-        //     lpos += sun_dir * lStep;
-        //     light *= 1.0 - Density(lpos)*0.6;
-        // }
+        /* Rim light calculation */
+        float densB=Density(pos+SUN_DIR*RIM_SAMPLE_DIST);
+        float rim=clamp(dens-densB,0.0,1.0);
+        rim=smoothstep(RIM_FADE_START,RIM_FADE_END,rim);
 
-        float phase = PhaseHG(dot(rd, sun_dir), 0.65);
-        vec3  sampleCol = vec3(1.0,0.95,0.9);//*light*phase*5.0;            // tweak to taste
+        /* Underside dimming based on world height */
+        float height_norm = (pos.y - CLOUD_MIN) / (CLOUD_MAX - CLOUD_MIN);
+        float undersideDim = mix(UNDER_MIN_BRIGHT, 1.0, 
+                                 smoothstep(0.0, UNDERSIDE_FADE_HEIGHT, height_norm));
 
-        float absorb = dens*step*0.02;                                   // 0.02 → thickness
-        float a      = 1.0 - exp(-absorb);                               // alpha of this slice
-        sampleCol   *= a;
+        /* Cone shadow (light transmittance from sun) */
+        float light=1.0;
+        vec3 lpos=pos;
+        for(int j=0;j<4&&light>0.01;++j){
+            lpos+=SUN_DIR*50.0;
+            light*=1.0-Density(lpos)*0.01;
+        }
 
-        sumColor += sampleCol * trans;
-        trans    *= 1.0 - a;
-        if(trans<0.01) break;
+        //++[ UNIFIED SCATTERING & ABSORPTION MODEL ]++
+
+        // 1. Calculate incoming light at the sample point.
+        float cosT = dot(rd, SUN_DIR);
+        float basePhase = mix(PhaseHG_Safe(cosT, 0.85), PhaseHG_Safe(cosT, -0.25), 0.45);
+        vec3 directLight = vec3(1.0,0.97,0.92) * (light * basePhase * SUN_ENERGY);
+
+        float aoc = exp(-dens*8.0);
+        vec3 ambientLight = textureLod(sky_cubemap, rd, 0.0).rgb * (AMBIENT_STRENGTH * aoc * dens * AMBIENT_MULTIPLIER);
+        
+        // 2. Combine and attenuate for underside darkness.
+        vec3 totalIncomingLight = (directLight + ambientLight) * undersideDim;
+
+        // 3. The scattered color is the incoming light multiplied by the SCATTERING coefficient.
+        //    This is the crucial step that links brightness to the physical properties.
+        vec3 scatteredColor = totalIncomingLight * SCATTERING_COEFF;
+
+        // 4. Add the artistic rim light. It's also scaled by scattering to keep it consistent.
+        vec3 rimLight = vec3(1.0,0.97,0.92) * rim * RIM_LIGHT_INTENSITY * light * SCATTERING_COEFF;
+        
+        vec3 col = scatteredColor + rimLight;
+
+        /* composite slice */
+        // The opacity of the slice now depends on the total extinction.
+        float absorb = dens * step * EXTINCTION_COEFF;
+        
+        // We can add a color shift due to absorption for extra detail (e.g., sunset clouds)
+        // For now, we assume uniform absorption. A more advanced shader could make this color-dependent.
+        vec3 attenuation = exp(-vec3(absorb));
+        
+        float a = 1.0 - attenuation.r; // Use one channel for alpha calculation
+        
+        sumCol += col * a * trans;
+        trans *= (1.0 - a);
+
+        step*=mix(1.0,0.5,dens);
     }
 
-    /* -------------------------------------------------------------------------- */
-    vec4 prev = imageLoad(screen_tex, ivec2(pix));
-    vec3 outc = mix(sumColor, prev.rgb, trans);   // under-composite
-    imageStore(screen_tex, ivec2(pix), vec4(outc,1.0));
-    //float fadeMask = HorizonMask(rd.y*0.01);
-    //vec3 debug = vec3(fadeMask);   // grayscale
-    //imageStore(screen_tex, ivec2(pix), vec4(debug,1.0));    
+    vec3 prev=imageLoad(screen_tex,ivec2(pix)).rgb;
+    vec3 outc=mix(sumCol,prev,trans);
+    imageStore(screen_tex,ivec2(pix),vec4(outc,1.0));
 }
