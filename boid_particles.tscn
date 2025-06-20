@@ -6,9 +6,10 @@
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_67vx0"]
 shader = ExtResource("2_ta0pb")
-shader_parameter/scale = 0.5
+shader_parameter/scale = 0.25
 
 [node name="BoidParticles" type="GPUParticles2D"]
+amount = 128
 texture = ExtResource("1_8m52x")
 process_material = SubResource("ShaderMaterial_67vx0")
 script = ExtResource("3_ta0pb")

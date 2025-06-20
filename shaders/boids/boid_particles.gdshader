@@ -11,6 +11,7 @@ void process() {
 								vec2(-sin(boid_pos_rot.b), cos(boid_pos_rot.b))); // second col
 	scale_rot_mat *= scale;
 	
+
 	TRANSFORM[0].xy = scale_rot_mat[0];
 	TRANSFORM[1].xy = scale_rot_mat[1];
 	TRANSFORM[3].xy = vec2(boid_pos_rot.r, boid_pos_rot.g);

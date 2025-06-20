@@ -1,7 +1,10 @@
-[gd_scene load_steps=2 format=3 uid="uid://cldpdbat8h8gx"]
+[gd_scene load_steps=3 format=3 uid="uid://cldpdbat8h8gx"]
 
+[ext_resource type="PackedScene" uid="uid://bnumqrrhnrdls" path="res://fps_counter.tscn" id="2_cwq0i"]
 [ext_resource type="PackedScene" uid="uid://vtay20ys00y7" path="res://boid_particles.tscn" id="2_me8ba"]
 
 [node name="Boids2D" type="Node2D"]
 
 [node name="BoidParticles" parent="." instance=ExtResource("2_me8ba")]
+
+[node name="FPS_Counter" parent="." instance=ExtResource("2_cwq0i")]

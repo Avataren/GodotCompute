@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://ctfnemhqe8ww6"]
+[gd_scene load_steps=8 format=3 uid="uid://ctfnemhqe8ww6"]
 
 [ext_resource type="Script" uid="uid://cdw4d72ok470d" path="res://scripts/compute_shader/compute_node.gd" id="1_ig7tw"]
 [ext_resource type="Script" uid="uid://npbifebldb3x" path="res://sprite_3d.gd" id="2_0xm2m"]
@@ -20,8 +20,6 @@ sdfgi_enabled = true
 glow_enabled = true
 
 [sub_resource type="BoxMesh" id="BoxMesh_h2yge"]
-
-[sub_resource type="Texture2DRD" id="Texture2DRD_h2yge"]
 
 [node name="Node3D" type="Node3D"]
 
@@ -51,5 +49,4 @@ speed = 0.1
 process_mode = 3
 transform = Transform3D(-3.35409e-06, -1.42926e-07, 1, 1.14341e-06, 76.7327, 1.86265e-09, -76.7327, 1.14341e-06, -4.37114e-08, -7.45058e-09, 0, -1)
 billboard = 1
-texture = SubResource("Texture2DRD_h2yge")
 script = ExtResource("2_0xm2m")

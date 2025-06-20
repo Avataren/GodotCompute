@@ -4,7 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://bikd4d0bqorvg" path="res://hdri/autumn_field_4k.exr" id="1_pf0io"]
 [ext_resource type="Script" uid="uid://dbrhxr0lyi0rk" path="res://scripts/camera/camera_fly_mode.gd" id="2_b8pgq"]
 [ext_resource type="NoiseTexture3D" uid="uid://nb1wxecfa55j" path="res://shaders/compositor/cloud_noise.tres" id="2_gycck"]
-[ext_resource type="Script" uid="uid://c18wfdqxtivx3" path="res://scripts/util/fps.gd" id="3_vlriw"]
+[ext_resource type="PackedScene" uid="uid://bnumqrrhnrdls" path="res://fps_counter.tscn" id="5_lrhfw"]
 [ext_resource type="Script" uid="uid://dh8r2ilh5favu" path="res://scripts/compositor/cloud_driver.gd" id="6_lrhfw"]
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_gycck"]
@@ -38,8 +38,8 @@ needs_normal_roughness = false
 script = ExtResource("1_pb5tc")
 sky_cubemap = ExtResource("1_pf0io")
 noise_3d = ExtResource("2_gycck")
-cloud_base = null
-cloud_top = null
+cloud_base = 2000.0
+cloud_top = 3000.0
 metadata/_custom_type_script = "uid://cr46qfqqofcj2"
 
 [sub_resource type="Compositor" id="Compositor_vlriw"]
@@ -89,28 +89,7 @@ mesh = SubResource("BoxMesh_vlriw")
 transform = Transform3D(0.999349, -0.0169972, -0.0318302, 0, 0.882109, -0.471044, 0.0360841, 0.470737, 0.881535, -0.998682, -0.365713, 2.66816)
 script = ExtResource("2_b8pgq")
 
-[node name="FPS_Counter" type="Control" parent="."]
-layout_mode = 3
-anchors_preset = 0
-offset_right = 40.0
-offset_bottom = 40.0
-script = ExtResource("3_vlriw")
-
-[node name="Panel" type="Panel" parent="FPS_Counter"]
-layout_mode = 0
-offset_right = 95.0
-offset_bottom = 40.0
-
-[node name="Label" type="Label" parent="FPS_Counter/Panel"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-text = "FPS:"
-horizontal_alignment = 1
-vertical_alignment = 1
+[node name="FPS_Counter" parent="." instance=ExtResource("5_lrhfw")]
 
 [node name="Cloud_Driver" type="Node3D" parent="."]
 script = ExtResource("6_lrhfw")
