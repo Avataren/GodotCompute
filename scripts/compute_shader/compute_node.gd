@@ -31,9 +31,10 @@ func _on_viewport_size_changed():
 
 func _initialize_compute_shader():
 	_free_resources()
+	if get_viewport() == null:
+		return;
 
 	rd = RenderingServer.get_rendering_device()
-	
 	var new_viewport_size = get_viewport().get_visible_rect().size
 	if new_viewport_size.x <= 0 or new_viewport_size.y <= 0:
 		return

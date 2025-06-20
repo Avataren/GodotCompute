@@ -1,3 +1,4 @@
+@tool
 extends GPUParticles2D
 
 var num_boids := 150
