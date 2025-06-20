@@ -1,0 +1,139 @@
+#[compute]
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
+
+// 3D density source
+layout(set = 0, binding = 0) uniform sampler3D noise_tex;
+
+// Push constants for parameters
+layout(push_constant, std140) uniform PC {
+    float iso;
+    vec3 grid_origin;
+    vec3 cell_size;
+    ivec3 grid_dims;
+} pc;
+
+// Output triangle data
+layout(set = 0, binding = 1, std430) buffer Triangles {
+    vec4 data[]; // x,y,z,w, nx,ny,nz,w packed consecutively
+} triangles;
+
+// Atomic counter for vertex count
+layout(set = 0, binding = 2, std430) buffer Counter {
+    uint vert_count;
+} counter;
+
+// --- CORRECTED LOOKUP TABLES ---
+
+const ivec2 EdgeVertexIndices[12] = ivec2[](
+    ivec2(0, 1), ivec2(1, 3), ivec2(3, 2), ivec2(2, 0),
+    ivec2(4, 5), ivec2(5, 7), ivec2(7, 6), ivec2(6, 4),
+    ivec2(0, 4), ivec2(1, 5), ivec2(3, 7), ivec2(2, 6)
+);
+
+// This table maps a marching cubes case index (0-255) to a list of
+// vertex indices that form the triangles for that case's mesh.
+// Each triangle is a set of 3 integers. The list for each case is
+// terminated by -1. A maximum of 5 triangles (15 indices) are possible.
+const int TriangleTable[256*16] = int[256*16](
+	// Case 0
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	// Case 1
+	3, 8, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    // rest of table omitted for brevity
+	// Case 255
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+);
+
+
+// Function to get density value, converting grid coords to normalized texture coords
+float get_density(ivec3 coord) {
+    vec3 uvw = vec3(coord) / vec3(pc.grid_dims);
+    return texture(noise_tex, uvw).r;
+}
+
+// Function to get gradient, using normalized texture coords
+vec3 get_gradient(vec3 world_pos) {
+    vec3 grad;
+    float eps = 1.0 / float(pc.grid_dims.x); // Epsilon scaled to one cell
+    
+    vec3 uvw = world_pos / (vec3(pc.grid_dims) * pc.cell_size);
+
+    grad.x = texture(noise_tex, uvw + vec3(eps, 0, 0)).r - texture(noise_tex, uvw - vec3(eps, 0, 0)).r;
+    grad.y = texture(noise_tex, uvw + vec3(0, eps, 0)).r - texture(noise_tex, uvw - vec3(0, eps, 0)).r;
+    grad.z = texture(noise_tex, uvw + vec3(0, 0, eps)).r - texture(noise_tex, uvw - vec3(0, 0, eps)).r;
+    
+    return normalize(grad);
+}
+
+
+void main() {
+    uvec3 id = gl_GlobalInvocationID;
+    if (id.x >= uint(pc.grid_dims.x) || id.y >= uint(pc.grid_dims.y) || id.z >= uint(pc.grid_dims.z)) {
+        return;
+    }
+
+    float d[8];
+    ivec3 corner_coords[8];
+    for (int i = 0; i < 8; ++i) {
+        ivec3 offset = ivec3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+        corner_coords[i] = ivec3(id) + offset;
+        d[i] = get_density(corner_coords[i]);
+    }
+
+    int cubeIndex = 0;
+    for (int i = 0; i < 8; ++i) {
+        if (d[i] < pc.iso) { // Note: often marching cubes convention is < iso is inside
+            cubeIndex |= 1 << i;
+        }
+    }
+    
+    // The EdgeMasks table is often unnecessary if the TriangleTable is complete
+    // as it will simply have -1 for the first entry in empty cells.
+    if (TriangleTable[cubeIndex*16+0] == -1) {
+        return;
+    }
+
+    for (int t = 0; t < 15; t += 3) {
+        // This access was already correct
+        if (TriangleTable[cubeIndex * 16 + t] == -1) {
+            break;
+        }
+
+        vec3 vert_pos[3];
+        for (int v = 0; v < 3; ++v) {
+            // CORRECTED THIS LINE:
+            int edge_index = TriangleTable[cubeIndex * 16 + t + v];
+
+            ivec2 edge_verts = EdgeVertexIndices[edge_index];
+            int i0 = edge_verts.x;
+            int i1 = edge_verts.y;
+
+            float d0 = d[i0];
+            float d1 = d[i1];
+
+            float tval = (pc.iso - d0) / (d1 - d0);
+            
+            vec3 p0 = pc.grid_origin + vec3(corner_coords[i0]) * pc.cell_size;
+            vec3 p1 = pc.grid_origin + vec3(corner_coords[i1]) * pc.cell_size;
+            
+            vert_pos[v] = mix(p0, p1, tval);
+        }
+
+        // Calculate face normal from the triangle's vertices
+        vec3 face_normal = normalize(cross(vert_pos[1] - vert_pos[0], vert_pos[2] - vert_pos[0]));
+
+        uint base_idx = atomicAdd(counter.vert_count, 3);
+        
+        // Store the three vertices
+        triangles.data[base_idx * 2 + 0] = vec4(vert_pos[0], 1.0);
+        triangles.data[base_idx * 2 + 1] = vec4(face_normal, 0.0);
+
+        triangles.data[base_idx * 2 + 2] = vec4(vert_pos[1], 1.0);
+        triangles.data[base_idx * 2 + 3] = vec4(face_normal, 0.0);
+        
+        triangles.data[base_idx * 2 + 4] = vec4(vert_pos[2], 1.0);
+        triangles.data[base_idx * 2 + 5] = vec4(face_normal, 0.0);
+    }
+}

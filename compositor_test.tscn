@@ -1,0 +1,118 @@
+[gd_scene load_steps=18 format=3 uid="uid://bmiuh4ws30gpr"]
+
+[ext_resource type="Script" uid="uid://cr46qfqqofcj2" path="res://scripts/compositor/RayMarcher.gd" id="1_pb5tc"]
+[ext_resource type="Texture2D" uid="uid://bikd4d0bqorvg" path="res://hdri/autumn_field_4k.exr" id="1_pf0io"]
+[ext_resource type="Script" uid="uid://dbrhxr0lyi0rk" path="res://scripts/camera/camera_fly_mode.gd" id="2_b8pgq"]
+[ext_resource type="NoiseTexture3D" uid="uid://nb1wxecfa55j" path="res://shaders/compositor/cloud_noise.tres" id="2_gycck"]
+[ext_resource type="Script" uid="uid://c18wfdqxtivx3" path="res://scripts/util/fps.gd" id="3_vlriw"]
+[ext_resource type="Script" uid="uid://dh8r2ilh5favu" path="res://scripts/compositor/cloud_driver.gd" id="6_lrhfw"]
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_gycck"]
+panorama = ExtResource("1_pf0io")
+
+[sub_resource type="Sky" id="Sky_pb5tc"]
+sky_material = SubResource("PanoramaSkyMaterial_gycck")
+
+[sub_resource type="Environment" id="Environment_b8pgq"]
+background_mode = 2
+sky = SubResource("Sky_pb5tc")
+ambient_light_source = 3
+tonemap_mode = 2
+ssao_enabled = true
+sdfgi_enabled = true
+glow_enabled = true
+adjustment_enabled = true
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_pf0io"]
+exposure_multiplier = 0.5
+
+[sub_resource type="CompositorEffect" id="CompositorEffect_pb5tc"]
+resource_local_to_scene = false
+resource_name = ""
+enabled = true
+effect_callback_type = 3
+access_resolved_color = false
+access_resolved_depth = false
+needs_motion_vectors = false
+needs_normal_roughness = false
+script = ExtResource("1_pb5tc")
+sky_cubemap = ExtResource("1_pf0io")
+noise_3d = ExtResource("2_gycck")
+cloud_base = 2000.0
+cloud_top = 3000.0
+metadata/_custom_type_script = "uid://cr46qfqqofcj2"
+
+[sub_resource type="Compositor" id="Compositor_vlriw"]
+compositor_effects = Array[CompositorEffect]([SubResource("CompositorEffect_pb5tc")])
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_b8pgq"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_vlriw"]
+albedo_color = Color(0.462278, 0.000153922, 0.464021, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_vlriw"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pb5tc"]
+transparency = 1
+albedo_color = Color(0.101961, 0.184314, 0.513726, 0.878431)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pf0io"]
+albedo_color = Color(0.162068, 0.306757, 0.0685741, 1)
+
+[node name="Node3D" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_b8pgq")
+camera_attributes = SubResource("CameraAttributesPractical_pf0io")
+compositor = SubResource("Compositor_vlriw")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.184018, -0.872451, -0.452732, 0.548861, -0.473306, 0.689008, -0.815407, -0.121697, 0.565952, 0, 0, 0)
+shadow_enabled = true
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+material_override = SubResource("StandardMaterial3D_b8pgq")
+material_overlay = SubResource("StandardMaterial3D_vlriw")
+mesh = SubResource("BoxMesh_vlriw")
+
+[node name="MeshInstance3D3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.66184, 0, 0)
+material_override = SubResource("StandardMaterial3D_pb5tc")
+mesh = SubResource("BoxMesh_vlriw")
+
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="."]
+transform = Transform3D(22.5666, 0, 0, 0, 0.208915, 0, 0, 0, 17.8721, 0, -0.606757, 0)
+material_override = SubResource("StandardMaterial3D_pf0io")
+mesh = SubResource("BoxMesh_vlriw")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.999349, -0.0169972, -0.0318302, 0, 0.882109, -0.471044, 0.0360841, 0.470737, 0.881535, -0.998682, -0.365713, 2.66816)
+script = ExtResource("2_b8pgq")
+
+[node name="FPS_Counter" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("3_vlriw")
+
+[node name="Panel" type="Panel" parent="FPS_Counter"]
+layout_mode = 0
+offset_right = 95.0
+offset_bottom = 40.0
+
+[node name="Label" type="Label" parent="FPS_Counter/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "FPS:"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Cloud_Driver" type="Node3D" parent="."]
+script = ExtResource("6_lrhfw")
+world_environment_path = NodePath("../WorldEnvironment")
+sun_light_path = NodePath("../DirectionalLight3D")

@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://cldpdbat8h8gx"]
+
+[ext_resource type="PackedScene" uid="uid://vtay20ys00y7" path="res://boid_particles.tscn" id="2_me8ba"]
+
+[node name="Boids2D" type="Node2D"]
+
+[node name="BoidParticles" parent="." instance=ExtResource("2_me8ba")]
