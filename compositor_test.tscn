@@ -38,8 +38,8 @@ needs_normal_roughness = false
 script = ExtResource("1_pb5tc")
 sky_cubemap = ExtResource("1_pf0io")
 noise_3d = ExtResource("2_gycck")
-cloud_base = 2000.0
-cloud_top = 3000.0
+cloud_base = null
+cloud_top = null
 metadata/_custom_type_script = "uid://cr46qfqqofcj2"
 
 [sub_resource type="Compositor" id="Compositor_vlriw"]
