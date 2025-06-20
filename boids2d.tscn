@@ -6,5 +6,12 @@
 [node name="Boids2D" type="Node2D"]
 
 [node name="BoidParticles" parent="." instance=ExtResource("2_me8ba")]
+friend_radius = 50.0
+avoid_radius = 24.01
+min_vel = 25.095
+max_vel = 100.0
+alignment_factor = 6.396
+cohesion_factor = 0.93
+seperation_factor = 3.93
 
 [node name="FPS_Counter" parent="." instance=ExtResource("2_cwq0i")]

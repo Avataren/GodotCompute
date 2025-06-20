@@ -1,6 +1,6 @@
 extends GPUParticles2D
 
-var num_boids := 256
+var num_boids := 150
 var boid_pos: Array[Vector2] = []
 var boid_vel: Array[Vector2] = []
 
