@@ -12,7 +12,7 @@ var boid_data_texture: ImageTexture
 @export_range(0, 100) var friend_radius := 30.0
 @export_range(0, 50) var avoid_radius := 15.0
 @export_range(0, 100) var min_vel := 25.0
-@export_range(0, 100) var max_vel := 50.0
+@export_range(0, 300) var max_vel := 50.0
 
 # --- Steering Factors ---
 @export_range(0, 5, 0.01) var turn_speed := 0.5
