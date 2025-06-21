@@ -24,3 +24,7 @@ window/vsync/vsync_mode=3
 [dotnet]
 
 project/assembly_name="compute shader test"
+
+[rendering]
+
+environment/defaults/default_clear_color=Color(0, 0, 0, 1)

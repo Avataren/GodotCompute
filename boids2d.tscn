@@ -12,8 +12,8 @@ avoid_radius = 20.907
 min_vel = 9.233
 max_vel = 200.0
 alignment_factor = 6.396
-cohesion_factor = 0.24
-separation_factor = 28.276
+cohesion_factor = 0.447
+separation_factor = 7.31
 edge_margin = 75.0
 edge_avoid_factor = 10.0
 
